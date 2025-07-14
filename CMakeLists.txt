@@ -34,6 +34,10 @@ add_library(score_addon_qvkrt
   score_addon_qvkrt.cpp
 )
 
+qt_add_resources(qvkrt_resources QVKRT/rt/shaders/shaders.qrc)
+target_sources(score_addon_qvkrt PRIVATE ${qvkrt_resources})
+
+
 # Link
 target_link_libraries(score_addon_qvkrt PUBLIC
   score_plugin_gfx

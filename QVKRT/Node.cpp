@@ -392,8 +392,8 @@ private:
     m_devFuncs->vkCreateImageView(m_dev, &viewInfo, nullptr, &m_outputView);
 
     m_rhiTex = m_rhi->newTexture(QRhiTexture::RGBA8, m_pixelSize, 1,
-                               QRhiTexture::RenderTarget           // 之后要当作 RT
-                             | QRhiTexture::UsedWithLoadStore);   // ray-tracing 要写
+                               QRhiTexture::RenderTarget
+                             | QRhiTexture::UsedWithLoadStore);
 
     QRhiTexture::NativeTexture nt;
     nt.object = quint64(m_output);

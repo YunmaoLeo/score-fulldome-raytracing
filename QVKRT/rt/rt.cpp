@@ -451,9 +451,9 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             df->vkCreatePipelineLayout(dev, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
 
             VkPipelineShaderStageCreateInfo stages[3] = {
-                getShader("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/raygen.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_KHR, dev, df),
-                getShader("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/miss.rmiss.spv", VK_SHADER_STAGE_MISS_BIT_KHR, dev, df),
-                getShader("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/closesthit.rchit.spv", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, dev, df)
+                getShader(":/shaders/raygen.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_KHR, dev, df),
+                getShader(":/shaders/miss.rmiss.spv", VK_SHADER_STAGE_MISS_BIT_KHR, dev, df),
+                getShader(":/shaders/closesthit.rchit.spv", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, dev, df)
             };
 
             VkRayTracingShaderGroupCreateInfoKHR shaderGroups[3];
