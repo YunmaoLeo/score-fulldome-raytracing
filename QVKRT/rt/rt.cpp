@@ -232,12 +232,65 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
         qDebug("setup");
         m_lastOutputImageView = outputImageView;
 
+
+        const float scale = 5.f;
+        // 1. Define a template for a single cube (8 vertices and 12 triangles -> 36 indices)
+        const float r = 0.02f; // A small radius for each cube
+        const float cube_verts_template[8 * 3] = {
+            -r, -r, -r,   r, -r, -r,   r,  r, -r,  -r,  r, -r,
+            -r, -r,  r,   r, -r,  r,   r,  r,  r,  -r,  r,  r
+        };
+        const uint32_t cube_indices_template[36] = {
+            0, 1, 2, 2, 3, 0, // Front
+            1, 5, 6, 6, 2, 1, // Right
+            5, 4, 7, 7, 6, 5, // Back
+            4, 0, 3, 3, 7, 4, // Left
+            3, 2, 6, 6, 7, 3, // Top
+            4, 5, 1, 1, 0, 4  // Bottom
+        };
+
+        // 2. Generate the full vertex and index arrays for all cubes
+        std::vector<float> all_vertices;
+        std::vector<uint32_t> all_indices;
+        all_vertices.reserve(m_point_positions.size() * 8 * 3);
+        all_indices.reserve(m_point_positions.size() * 36);
+
+        for (size_t i = 0; i < m_point_positions.size(); ++i) {
+            const auto& pos = m_point_positions[i];
+            uint32_t vertex_offset = i * 8;
+
+            // Add 8 vertices for this cube, offset by the point's position
+            for (int j = 0; j < 8; ++j) {
+                all_vertices.push_back(cube_verts_template[j * 3 + 0] + (pos.x() * scale));
+                all_vertices.push_back(cube_verts_template[j * 3 + 1] + (pos.y() * scale));
+                all_vertices.push_back(cube_verts_template[j * 3 + 2] + (pos.z() * scale));
+            }
+
+            // Add 36 indices for this cube, offset by the current vertex count
+            for (int j = 0; j < 36; ++j) {
+                all_indices.push_back(cube_indices_template[j] + vertex_offset);
+            }
+        }
+
+        qDebug() << "Generated" << all_vertices.size() / 3 << "vertices and" << all_indices.size() << "indices.";
+
+        // 3. Create and upload the buffers with the generated mesh data
+        m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                                                 physDev, dev, f, df, all_vertices.size() * sizeof(float));
+        updateHostData(m_vertexBuffer, dev, df, all_vertices.data(), all_vertices.size() * sizeof(float));
+
+        m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                                                physDev, dev, f, df, all_indices.size() * sizeof(uint32_t));
+        updateHostData(m_indexBuffer, dev, df, all_indices.data(), all_indices.size() * sizeof(uint32_t));
+
+
+
         // bottom level acceleration structure
         {
-            m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(verts));
-            updateHostData(m_vertexBuffer, dev, df, verts, sizeof(verts));
-            m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(indices));
-            updateHostData(m_indexBuffer, dev, df, indices, sizeof(indices));
+            // m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(verts));
+            // updateHostData(m_vertexBuffer, dev, df, verts, sizeof(verts));
+            // m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(indices));
+            // updateHostData(m_indexBuffer, dev, df, indices, sizeof(indices));
             // no extra transformation on the vertices for now
 //            m_transformBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(transform));
 //            updateHostData(m_transformBuffer, dev, df, transform.matrix, sizeof(transform.matrix));
@@ -257,7 +310,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             asGeom.geometry.triangles.vertexFormat = vertFormat;
             asGeom.geometry.triangles.vertexData = vertexBufferDeviceAddress;
             asGeom.geometry.triangles.vertexStride = vertStride;
-            asGeom.geometry.triangles.maxVertex = vertHighestIndex;
+            asGeom.geometry.triangles.maxVertex = (all_vertices.size() / 3) - 1;
             asGeom.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
             asGeom.geometry.triangles.indexData = indexBufferDeviceAddress;
             //asGeom.geometry.triangles.transformData = transformBufferDeviceAddress;
@@ -268,7 +321,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             asBuildGeomInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
             asBuildGeomInfo.geometryCount = 1;
             asBuildGeomInfo.pGeometries = &asGeom;
-            const uint32_t primitiveCountPerGeometry = 1; // geometryCount elements
+            const uint32_t primitiveCountPerGeometry = all_indices.size() / 3; // geometryCount elements
             VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
             sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
             vkGetAccelerationStructureBuildSizesKHR(dev,
@@ -596,6 +649,20 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
                                  1, &barrier);
     }
 
+  static float time = 0.0f;
+  time += 0.01f;
+  float cameraY = 3.0f * sin(time); // Moves the camera between -3 and +3 on the Y axis
+
+  // Define camera properties for lookAt()
+  QVector3D cameraPosition = QVector3D(0.0f, cameraY, 5.0f); // Eye position
+  QVector3D lookAtPoint    = QVector3D(0.0f, 0.0f, 0.0f);   // The point to look at (the origin)
+  QVector3D upVector       = QVector3D(0.0f, 1.0f, 0.0f);   // Defines which way is "up"
+
+  // Rebuild the view matrix every frame
+  m_view.setToIdentity();
+  m_view.lookAt(cameraPosition, lookAtPoint, upVector);
+
+
     m_projInv = m_proj.inverted();
     m_viewInv = m_view.inverted();
     uchar ubData[128];
@@ -662,6 +729,9 @@ void RayTracer::setPointCloud(const std::vector<QVector4D>& positions, const std
       qDebug() << "Point Cloud data is not valid";
       return;
     }
+
+  m_pointCount = positions.size();
+  m_point_positions = positions;
 
   qDebug() << "[RayTracer] update point cloud successfully，number:" << m_pointCount;
 

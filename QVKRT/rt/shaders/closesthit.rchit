@@ -7,5 +7,6 @@ hitAttributeEXT vec3 baryCoord;
 
 void main()
 {
-    hitValue = vec3(1.0f - baryCoord.x - baryCoord.y, baryCoord.x, baryCoord.y);
+    //hitValue = vec3(1.0f - baryCoord.x - baryCoord.y, baryCoord.x, baryCoord.y);
+    hitValue = vec3(1.0f,1.0f,1.0f);
 }
