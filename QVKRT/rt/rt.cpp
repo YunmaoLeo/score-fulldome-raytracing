@@ -438,30 +438,16 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             ubLayoutBinding.descriptorCount = 1;
             ubLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
-            VkDescriptorSetLayoutBinding pointLayoutBinding = {};
-            pointLayoutBinding.binding = 3;
-            pointLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            pointLayoutBinding.descriptorCount = 1;
-            pointLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-
-            VkDescriptorSetLayoutBinding colorLayoutBinding = {};
-            colorLayoutBinding.binding = 4;
-            colorLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            colorLayoutBinding.descriptorCount = 1;
-            colorLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-
 
             const VkDescriptorSetLayoutBinding bindings[5] = {
                 asLayoutBinding,
                 outputLayoutBinding,
                 ubLayoutBinding,
-                pointLayoutBinding,
-                colorLayoutBinding,
             };
 
             VkDescriptorSetLayoutCreateInfo descSetLayoutCreateInfo = {};
             descSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            descSetLayoutCreateInfo.bindingCount = 5;
+            descSetLayoutCreateInfo.bindingCount = 3;
             descSetLayoutCreateInfo.pBindings = bindings;
             df->vkCreateDescriptorSetLayout(dev, &descSetLayoutCreateInfo, nullptr, &m_descSetLayout);
 
@@ -472,8 +458,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             df->vkCreatePipelineLayout(dev, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
 
             VkPipelineShaderStageCreateInfo stages[3] = {
-              getShader(":/shaders/raygen_pointcloud.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_KHR, dev, df),
-                // getShader(":/shaders/raygen.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_KHR, dev, df),
+                getShader(":/shaders/raygen.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_KHR, dev, df),
                 getShader(":/shaders/miss.rmiss.spv", VK_SHADER_STAGE_MISS_BIT_KHR, dev, df),
                 getShader(":/shaders/closesthit.rchit.spv", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, dev, df)
             };
@@ -575,37 +560,12 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
                 ubWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 ubWrite.pBufferInfo = &descUniformBuffer;
 
-                VkDescriptorBufferInfo pointBufferInfo = {
-                  m_pointBuffer.buf, 0, m_pointBuffer.size
-              };
-                VkWriteDescriptorSet pointWrite = {};
-                pointWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                pointWrite.dstSet = m_descSets[i];
-                pointWrite.dstBinding = 3;
-                pointWrite.descriptorCount = 1;
-                pointWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                pointWrite.pBufferInfo = &pointBufferInfo;
-
-                VkDescriptorBufferInfo colorBufferInfo = {
-                  m_colorBuffer.buf, 0, m_colorBuffer.size
-              };
-                VkWriteDescriptorSet colorWrite = {};
-                colorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                colorWrite.dstSet = m_descSets[i];
-                colorWrite.dstBinding = 4;
-                colorWrite.descriptorCount = 1;
-                colorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                colorWrite.pBufferInfo = &colorBufferInfo;
-
-
                 VkWriteDescriptorSet writeSets[] = {
                     asWrite,
                     imageWrite,
                     ubWrite,
-                    pointWrite,
-                    colorWrite
                 };
-                df->vkUpdateDescriptorSets(dev, 5, writeSets, 0, VK_NULL_HANDLE);
+                df->vkUpdateDescriptorSets(dev, 3, writeSets, 0, VK_NULL_HANDLE);
             }
         }
 
@@ -702,34 +662,6 @@ void RayTracer::setPointCloud(const std::vector<QVector4D>& positions, const std
       qDebug() << "Point Cloud data is not valid";
       return;
     }
-
-  m_pointCount = positions.size();
-  size_t posSize = m_pointCount * sizeof(QVector4D);
-  size_t colSize = m_pointCount * sizeof(QVector4D);
-
-  if (m_pointBuffer.buf != VK_NULL_HANDLE)
-  {
-    freeBuffer(m_pointBuffer, m_device, m_df);
-  }
-  if (m_colorBuffer.buf != VK_NULL_HANDLE)
-  {
-    freeBuffer(m_colorBuffer, m_device, m_df);
-  }
-
-  m_pointBuffer = createHostVisibleBuffer(
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      m_physDev, m_device, m_f, m_df, static_cast<uint32_t>(posSize)
-  );
-  m_colorBuffer = createHostVisibleBuffer(
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      m_physDev, m_device, m_f, m_df, static_cast<uint32_t>(colSize)
-  );
-
-  updateHostData(m_pointBuffer, m_device, m_df, positions.data(), posSize);
-  updateHostData(m_colorBuffer, m_device, m_df, colors.data(), colSize);
-
-  m_pointBuffer.addr = getBufferDeviceAddress(m_device, m_pointBuffer);
-  m_colorBuffer.addr = getBufferDeviceAddress(m_device, m_colorBuffer);
 
   qDebug() << "[RayTracer] update point cloud successfully，number:" << m_pointCount;
 
