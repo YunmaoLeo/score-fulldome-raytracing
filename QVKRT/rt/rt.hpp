@@ -30,6 +30,9 @@ public:
                        VkImageView outputImageView,
                        uint currentFrameSlot,
                        const QSize &pixelSize);
+
+    void setPointCloud(const std::vector<QVector4D>& positions,
+    const std::vector<QVector4D>& colors);
 private:
     QRhiTexture* m_tex = nullptr;
     QSize m_size;
@@ -55,6 +58,11 @@ private:
         VkDeviceAddress addr = 0;
         size_t size = 0;
     };
+
+    Buffer m_pointBuffer;
+    Buffer m_colorBuffer;
+    size_t m_pointCount = 0;
+
     Buffer createASBuffer(int usage, VkPhysicalDevice physDev, VkDevice dev, QVulkanFunctions *f, QVulkanDeviceFunctions *df, uint32_t size);
     Buffer createHostVisibleBuffer(int usage, VkPhysicalDevice physDev, VkDevice dev, QVulkanFunctions *f, QVulkanDeviceFunctions *df, uint32_t size);
     void updateHostData(const Buffer &b, VkDevice dev, QVulkanDeviceFunctions *df, const void *data, size_t dataLen);

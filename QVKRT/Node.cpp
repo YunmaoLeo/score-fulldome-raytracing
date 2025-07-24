@@ -1,4 +1,7 @@
 #include "Node.hpp"
+
+#include "rt/load_ply.h"
+
 #include <private/qrhivulkan_p.h>
 #include "rt/rt.hpp"
 #include "score/gfx/Vulkan.hpp"
@@ -509,6 +512,19 @@ private:
       }
     }
 
+    std::vector<QVector4D> positions;
+    std::vector<QVector4D> colors;
+    bool ok = QVKRT::loadStanfordPLY("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/data/bun000.ply", positions, colors);
+    if (ok)
+    {
+      raytracing.setPointCloud(positions, colors);
+      qDebug() << "Successfully read the data and upload to GPU";
+    }
+    else
+    {
+      qWarning() << "Failed to read the point cloud data";
+    }
+
   }
 
   int m_rotationCount = 0;
@@ -525,8 +541,8 @@ private:
 
       // Our object rotates in a very crude way
       QMatrix4x4 model;
-      model.scale(0.5);
-      model.rotate(m_rotationCount++, QVector3D(1, 1, 1));
+      model.scale(0.75);
+      // model.rotate(m_rotationCount++, QVector3D(1, 1, 1));
 
       // The camera and viewports are fixed
       QMatrix4x4 view;

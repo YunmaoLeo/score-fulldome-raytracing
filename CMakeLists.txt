@@ -32,6 +32,8 @@ add_library(score_addon_qvkrt
 
   score_addon_qvkrt.hpp
   score_addon_qvkrt.cpp
+        QVKRT/rt/load_ply.h
+        QVKRT/rt/load_ply.cpp
 )
 
 qt_add_resources(qvkrt_resources QVKRT/rt/shaders/shaders.qrc)
