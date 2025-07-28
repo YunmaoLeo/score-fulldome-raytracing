@@ -30,6 +30,8 @@ add_library(score_addon_qvkrt
   QVKRT/rt/rt.hpp
   QVKRT/rt/rt.cpp
 
+  "${3RDPARTY_FOLDER}/miniply/miniply.cpp"
+
   score_addon_qvkrt.hpp
   score_addon_qvkrt.cpp
         QVKRT/rt/load_ply.h
@@ -46,6 +48,11 @@ target_link_libraries(score_addon_qvkrt PUBLIC
   score_plugin_engine
   Vulkan::Vulkan
 )
+
+target_include_directories(
+        score_plugin_threedim SYSTEM
+        PRIVATE "${3RDPARTY_FOLDER}/libssynth/src" "${3RDPARTY_FOLDER}/vcglib"
+        "${3RDPARTY_FOLDER}/eigen" "${3RDPARTY_FOLDER}/miniply")
 
 # Target-specific options
 setup_score_plugin(score_addon_qvkrt)

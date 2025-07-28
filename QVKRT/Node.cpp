@@ -514,7 +514,7 @@ private:
 
     std::vector<QVector4D> positions;
     std::vector<QVector4D> colors;
-    bool ok = QVKRT::loadStanfordPLY("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/data/bun000.ply", positions, colors);
+    bool ok = QVKRT::loadStanfordPLY("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/claw.ply", positions, colors);
     if (ok)
     {
       raytracing.setPointCloud(positions, colors);

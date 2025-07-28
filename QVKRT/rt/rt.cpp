@@ -235,7 +235,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
 
         const float scale = 5.f;
         // 1. Define a template for a single cube (8 vertices and 12 triangles -> 36 indices)
-        const float r = 0.02f; // A small radius for each cube
+        const float r = 0.04f; // A small radius for each cube
         const float cube_verts_template[8 * 3] = {
             -r, -r, -r,   r, -r, -r,   r,  r, -r,  -r,  r, -r,
             -r, -r,  r,   r, -r,  r,   r,  r,  r,  -r,  r,  r
@@ -282,6 +282,20 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
         m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
                                                 physDev, dev, f, df, all_indices.size() * sizeof(uint32_t));
         updateHostData(m_indexBuffer, dev, df, all_indices.data(), all_indices.size() * sizeof(uint32_t));
+
+
+        //initialize vertex color
+        std::vector<QVector4D> all_colors;
+        all_colors.reserve(m_point_colors.size());
+        for (size_t i = 0; i < m_point_colors.size(); ++i) {
+            all_colors.push_back(m_point_colors[i]);
+        }
+        m_colorBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        physDev, dev, f, df, all_colors.size() * sizeof(QVector4D)
+        );
+
+      updateHostData(m_colorBuffer, dev, df, all_colors.data(), all_colors.size() * sizeof(QVector4D));
+
 
 
 
@@ -491,16 +505,24 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
             ubLayoutBinding.descriptorCount = 1;
             ubLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
+            VkDescriptorSetLayoutBinding colorLayoutBinding = {};
+            colorLayoutBinding.binding = 3;
+            colorLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            colorLayoutBinding.descriptorCount = 1;
+            colorLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+
+
 
             const VkDescriptorSetLayoutBinding bindings[5] = {
                 asLayoutBinding,
                 outputLayoutBinding,
                 ubLayoutBinding,
+                colorLayoutBinding,
             };
 
             VkDescriptorSetLayoutCreateInfo descSetLayoutCreateInfo = {};
             descSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            descSetLayoutCreateInfo.bindingCount = 3;
+            descSetLayoutCreateInfo.bindingCount = 4;
             descSetLayoutCreateInfo.pBindings = bindings;
             df->vkCreateDescriptorSetLayout(dev, &descSetLayoutCreateInfo, nullptr, &m_descSetLayout);
 
@@ -571,6 +593,9 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
 
         // descriptor sets
         {
+
+
+
             VkDescriptorSetAllocateInfo descSetAllocInfo = {};
             descSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             descSetAllocInfo.descriptorPool = m_descPool;
@@ -613,12 +638,25 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
                 ubWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 ubWrite.pBufferInfo = &descUniformBuffer;
 
+                VkDescriptorBufferInfo colorBufferInfo = {
+                  m_colorBuffer.buf, 0, m_colorBuffer.size
+              };
+
+                VkWriteDescriptorSet colorWrite = {};
+                colorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                colorWrite.dstSet = m_descSets[i];
+                colorWrite.dstBinding = 3;
+                colorWrite.descriptorCount = 1;
+                colorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                colorWrite.pBufferInfo = &colorBufferInfo;
+
                 VkWriteDescriptorSet writeSets[] = {
                     asWrite,
                     imageWrite,
                     ubWrite,
+                    colorWrite,
                 };
-                df->vkUpdateDescriptorSets(dev, 3, writeSets, 0, VK_NULL_HANDLE);
+                df->vkUpdateDescriptorSets(dev, 4, writeSets, 0, VK_NULL_HANDLE);
             }
         }
 
@@ -651,11 +689,11 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
 
   static float time = 0.0f;
   time += 0.01f;
-  float cameraY = 3.0f * sin(time); // Moves the camera between -3 and +3 on the Y axis
+  float cameraY = 6.0f * sin(time); // Moves the camera between -3 and +3 on the Y axis
 
   // Define camera properties for lookAt()
-  QVector3D cameraPosition = QVector3D(0.0f, cameraY, 5.0f); // Eye position
-  QVector3D lookAtPoint    = QVector3D(0.0f, 0.0f, 0.0f);   // The point to look at (the origin)
+  QVector3D cameraPosition = QVector3D(-60.0f, cameraY, -45.0f); // Eye position
+  QVector3D lookAtPoint    = QVector3D(80.0f, 0.0f, 5.0f);   // The point to look at (the origin)
   QVector3D upVector       = QVector3D(0.0f, 1.0f, 0.0f);   // Defines which way is "up"
 
   // Rebuild the view matrix every frame
@@ -732,6 +770,8 @@ void RayTracer::setPointCloud(const std::vector<QVector4D>& positions, const std
 
   m_pointCount = positions.size();
   m_point_positions = positions;
+
+  m_point_colors = colors;
 
   qDebug() << "[RayTracer] update point cloud successfully，number:" << m_pointCount;
 

@@ -62,6 +62,8 @@ private:
     std::vector<QVector4D> m_point_positions;
     size_t m_pointCount = 0;
 
+    std::vector<QVector4D> m_point_colors;
+
     Buffer createASBuffer(int usage, VkPhysicalDevice physDev, VkDevice dev, QVulkanFunctions *f, QVulkanDeviceFunctions *df, uint32_t size);
     Buffer createHostVisibleBuffer(int usage, VkPhysicalDevice physDev, VkDevice dev, QVulkanFunctions *f, QVulkanDeviceFunctions *df, uint32_t size);
     void updateHostData(const Buffer &b, VkDevice dev, QVulkanDeviceFunctions *df, const void *data, size_t dataLen);
@@ -84,6 +86,7 @@ private:
 
     Buffer m_vertexBuffer;
     Buffer m_indexBuffer;
+    Buffer m_colorBuffer;
     Buffer m_transformBuffer;
     Buffer m_blasBuffer;
     VkAccelerationStructureKHR m_blas;
