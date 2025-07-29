@@ -32,10 +32,23 @@ add_library(score_addon_qvkrt
 
   "${3RDPARTY_FOLDER}/miniply/miniply.cpp"
 
+        QVKRT/load_ply.hpp
+        QVKRT/load_ply.cpp
+
+
+        QVKRT/Ply.hpp
+        QVKRT/Ply.cpp
+
+        QVKRT/TinyObj.hpp
+        QVKRT/TinyObj.cpp
+
+
+        QVKRT/PlyLoader.hpp
+        QVKRT/PlyLoader.cpp
+
   score_addon_qvkrt.hpp
   score_addon_qvkrt.cpp
-        QVKRT/rt/load_ply.h
-        QVKRT/rt/load_ply.cpp
+
 )
 
 qt_add_resources(qvkrt_resources QVKRT/rt/shaders/shaders.qrc)
@@ -47,6 +60,7 @@ target_link_libraries(score_addon_qvkrt PUBLIC
   score_plugin_gfx
   score_plugin_engine
   Vulkan::Vulkan
+  score_plugin_avnd
 )
 
 target_include_directories(
