@@ -1,9 +1,12 @@
 #include "Node.hpp"
 
 #include "load_ply.hpp"
+#include "halp/geometry.hpp"
+
+#include <Gfx/Graph/GeometryFilterNodeRenderer.hpp>
 
 #include <private/qrhivulkan_p.h>
-#include "rt/rt.hpp"
+#include <QVKRT/rt/rt.hpp>
 #include "score/gfx/Vulkan.hpp"
 
 #include <Gfx/Graph/NodeRenderer.hpp>
@@ -232,6 +235,11 @@ void main ()
 
 Node::Node()
 {
+  this->requiresDepth = true;
+
+  input.push_back(new score::gfx::Port{this,
+    nullptr, score::gfx::Types::Geometry,{}});
+
   // This texture is provided by score
   m_image = QImage(":/ossia-score.png");
 
@@ -512,18 +520,18 @@ private:
       }
     }
 
-    std::vector<QVector4D> positions;
-    std::vector<QVector4D> colors;
-    bool ok = QVKRT::loadPly("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/claw.ply", positions, colors);
-    if (ok)
-    {
-      raytracing.setPointCloud(positions, colors);
-      qDebug() << "Successfully read the data and upload to GPU";
-    }
-    else
-    {
-      qWarning() << "Failed to read the point cloud data";
-    }
+    // std::vector<QVector4D> positions;
+    // std::vector<QVector4D> colors;
+    // bool ok = QVKRT::loadPly("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/claw.ply", positions, colors);
+    // if (ok)
+    // {
+    //   raytracing.setPointCloud(positions, colors);
+    //   qDebug() << "Successfully read the data and upload to GPU";
+    // }
+    // else
+    // {
+    //   qWarning() << "Failed to read the point cloud data";
+    // }
 
   }
 
@@ -532,6 +540,9 @@ private:
       override
   {
     auto& n = static_cast<const Node&>(this->node);
+
+
+    bool mustRecreatePasses = false;
     {
       // Set up a basic camera
       auto& ubo = (score::gfx::ModelCameraUBO&)n.ubo;
@@ -566,6 +577,7 @@ private:
       res.updateDynamicBuffer(m_material.buffer, 0, m_material.size, &ubo);
     }
 
+
     // Update the process UBO (indicates timing)
     res.updateDynamicBuffer(
         m_processUBO,
@@ -573,12 +585,24 @@ private:
         sizeof(score::gfx::ProcessUBO),
         &n.standardUBO);
 
+
+    if (this->geometryChanged)  // n = static_cast<const Node&>(this->node);
+    {
+      if (!n.m_positions.empty())
+      {
+        raytracing.setPointCloud(n.m_positions, n.m_colors);
+        qDebug() << "Geometry input updated, uploaded to GPU!";
+      }
+    }
+
     // If images haven't been uploaded yet, upload them.
     if (!m_uploaded)
     {
       res.uploadTexture(m_texture, n.m_image);
       m_uploaded = true;
     }
+
+
   }
 
   // Everything is set up, we can render our mesh
@@ -629,4 +653,56 @@ Node::createRenderer(score::gfx::RenderList& r) const noexcept
 {
   return new Renderer{*this};
 }
+
+void Node::process(score::gfx::Message&& msg)
+{
+  ProcessNode::process(msg.token);
+
+  int32_t p = 0;
+  for (const score::gfx::gfx_input& m : msg.input)
+  {
+    if (auto val = ossia::get_if<ossia::geometry_spec>(&m))
+    {
+      // We received a new mesh
+      m_positions.clear();
+      m_colors.clear();
+
+      for (const auto& mesh : val->meshes->meshes)  // halp::dynamic_geometry
+      {
+        // Extract positions
+        const float* buf = reinterpret_cast<const float*>(mesh.buffers[0].data.get());
+        int vertexCount = mesh.vertices;
+
+        for (int i = 0; i < vertexCount; i++)
+        {
+          QVector4D pos(buf[i * 3 + 0], buf[i * 3 + 1], buf[i * 3 + 2], 1.0f);
+          m_positions.push_back(pos);
+        }
+
+        // If color buffer exists
+        if (mesh.bindings.size() >= 2)
+        {
+          const float* colBuf =
+              reinterpret_cast<const float*>(mesh.buffers[1].data.get());
+
+          for (int i = 0; i < vertexCount; i++)
+          {
+            QVector4D col(colBuf[i * 3 + 0], colBuf[i * 3 + 1], colBuf[i * 3 + 2], 1.0f);
+            m_colors.push_back(col);
+          }
+        }
+        else
+        {
+          for (int i = 0; i < vertexCount; i++)
+            m_colors.push_back(QVector4D(1.f, 1.f, 1.f, 1.f));
+        }
+      }
+
+      m_geometryDirty = true; // Mark for update
+    }
+
+    ++p;
+  }
+}
+
 }

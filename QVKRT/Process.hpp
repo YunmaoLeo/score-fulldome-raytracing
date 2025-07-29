@@ -3,7 +3,6 @@
 #include <Process/Drop/ProcessDropHandler.hpp>
 #include <Process/GenericProcessFactory.hpp>
 #include <Process/Process.hpp>
-
 #include <QVKRT/Metadata.hpp>
 
 namespace QVKRT
@@ -30,6 +29,7 @@ public:
   ~Model() override;
 
 private:
+  void init();
   QString prettyName() const noexcept override;
 };
 

@@ -11,7 +11,7 @@
 #include <vector>
 
 #include <string_view>
-namespace Threedim
+namespace QVKRT
 {
 using float_vec = boost::container::vector<float, ossia::pod_allocator<float>>;
 

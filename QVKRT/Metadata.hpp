@@ -13,7 +13,7 @@ PROCESS_METADATA(,
                  "QVKRT",                           // Pretty name
                  Process::ProcessCategory::Visual,  // Category
                  "GFX",                             // Category
-                 "My VFX",                          // Description
+                 "Vulkan raytracing",                          // Description
                  "ossia team",                      // Author
                  (QStringList{"shader", "gfx"}),    // Tags
                  {},                                // Inputs
@@ -21,3 +21,4 @@ PROCESS_METADATA(,
                  QUrl{},                            // Doc link
                  Process::ProcessFlags::SupportsAll // Flags
 )
+

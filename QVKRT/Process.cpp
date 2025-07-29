@@ -18,13 +18,22 @@ Model::Model(
 {
   metadata().setInstanceName(*this);
   m_outlets.push_back(new Gfx::TextureOutlet{Id<Process::Port>(0), this});
+
+  init();
 }
 
 Model::~Model() { }
 
+void Model::init(){
+  if (m_inlets.empty())
+  {
+    m_inlets.push_back(new Gfx::GeometryInlet{Id<Process::Port>(0), this});
+  }
+}
+
 QString Model::prettyName() const noexcept
 {
-  return tr("My VFX");
+  return tr("Vulkan Ratracing");
 }
 
 }

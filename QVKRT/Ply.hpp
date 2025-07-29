@@ -1,7 +1,7 @@
 #pragma once
-#include <Threedim/TinyObj.hpp>
+#include <QVKRT/TinyObj.hpp>
 
-namespace Threedim
+namespace QVKRT
 {
 std::vector<mesh> PlyFromFile(std::string_view filename, float_vec& data);
 }

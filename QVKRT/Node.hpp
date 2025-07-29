@@ -14,10 +14,15 @@ public:
 
   score::gfx::NodeRenderer*
   createRenderer(score::gfx::RenderList& r) const noexcept override;
-
+  void process(score::gfx::Message&& msg) override;
 
 private:
   score::gfx::ModelCameraUBO ubo;
+
+  std::vector<QVector4D> m_positions;
+  std::vector<QVector4D> m_colors;
+
+  bool m_geometryDirty = false;
 
   friend Renderer;
   QImage m_image;

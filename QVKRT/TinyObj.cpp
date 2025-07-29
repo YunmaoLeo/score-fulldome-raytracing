@@ -6,7 +6,7 @@
 
 #include <QDebug>
 #include <QElapsedTimer>
-namespace Threedim
+namespace QVKRT
 {
 
 std::vector<mesh>

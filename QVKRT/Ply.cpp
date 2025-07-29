@@ -1,7 +1,7 @@
 #include "Ply.hpp"
 
-#include <miniply.h>
-namespace Threedim
+#include <miniply/miniply.h>
+namespace QVKRT
 {
 
 struct TriMesh
