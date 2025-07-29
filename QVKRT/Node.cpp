@@ -1,6 +1,6 @@
 #include "Node.hpp"
 
-#include "rt/load_ply.h"
+#include "load_ply.hpp"
 
 #include <private/qrhivulkan_p.h>
 #include "rt/rt.hpp"
@@ -514,7 +514,7 @@ private:
 
     std::vector<QVector4D> positions;
     std::vector<QVector4D> colors;
-    bool ok = QVKRT::loadStanfordPLY("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/claw.ply", positions, colors);
+    bool ok = QVKRT::loadPly("/home/lejie.liu/Documents/rt/score/src/addons/score-vfx-template/QVKRT/rt/bunny/claw.ply", positions, colors);
     if (ok)
     {
       raytracing.setPointCloud(positions, colors);
