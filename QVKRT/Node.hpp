@@ -19,6 +19,8 @@ public:
 private:
   score::gfx::ModelCameraUBO ubo;
 
+  int lastIndex = -1;
+
   std::vector<QVector4D> m_positions;
   std::vector<QVector4D> m_colors;
 

@@ -267,7 +267,7 @@ public:
 
 private:
   ~Renderer() { }
-
+  bool m_isRtReady = false;
   QSize m_pixelSize;
   QRhi* m_rhi = nullptr;
   QRhiTexture* m_rhiTex = nullptr;
@@ -591,6 +591,7 @@ private:
       if (!n.m_positions.empty())
       {
         raytracing.setPointCloud(n.m_positions, n.m_colors);
+        m_isRtReady = true;
         qDebug() << "Geometry input updated, uploaded to GPU!";
       }
     }
@@ -616,11 +617,14 @@ private:
     auto *cbHandles = static_cast<const QRhiVulkanCommandBufferNativeHandles *>(cb.nativeHandles());
 
     VkCommandBuffer vkCmdBuf = cbHandles->commandBuffer;
-    m_outputLayout = raytracing.doIt(m_inst, m_physDev, m_dev, m_devFuncs, m_funcs,
-                                 vkCmdBuf, m_output, m_outputLayout, m_outputView,
-                                 currentFrameSlot, m_pixelSize);
+    if (m_isRtReady)
+    {
+      m_outputLayout = raytracing.doIt(m_inst, m_physDev, m_dev, m_devFuncs, m_funcs,
+                              vkCmdBuf, m_output, m_outputLayout, m_outputView,
+                              currentFrameSlot, m_pixelSize);
+    }
 
-    m_rhiTex->setNativeLayout(int(m_outputLayout));   // 告诉 QRhi 新布局
+    m_rhiTex->setNativeLayout(int(m_outputLayout));
 
     m_rhiTex->setNativeLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     m_outputLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -663,7 +667,14 @@ void Node::process(score::gfx::Message&& msg)
   {
     if (auto val = ossia::get_if<ossia::geometry_spec>(&m))
     {
-      // We received a new mesh
+      ProcessNode::process(p, *val);
+      if (lastIndex == val->meshes->dirty_index)
+      {
+        return;
+      }
+      lastIndex = val->meshes->dirty_index;
+
+      qDebug() << "Received a new Mesh with size: " << val->meshes->dirty_index;
       m_positions.clear();
       m_colors.clear();
 
@@ -679,26 +690,21 @@ void Node::process(score::gfx::Message&& msg)
           m_positions.push_back(pos);
         }
 
-        // If color buffer exists
-        if (mesh.bindings.size() >= 2)
+        bool hasColor = mesh.bindings.size() >= 2 && mesh.buffers.size() > 1;
+        if (hasColor)
         {
-          const float* colBuf =
-              reinterpret_cast<const float*>(mesh.buffers[1].data.get());
-
+          const float* colBuf = reinterpret_cast<const float*>(mesh.buffers[1].data.get());
           for (int i = 0; i < vertexCount; i++)
-          {
-            QVector4D col(colBuf[i * 3 + 0], colBuf[i * 3 + 1], colBuf[i * 3 + 2], 1.0f);
-            m_colors.push_back(col);
-          }
+            m_colors.emplace_back(colBuf[i*3+0], colBuf[i*3+1], colBuf[i*3+2], 1.0f);
         }
         else
         {
           for (int i = 0; i < vertexCount; i++)
-            m_colors.push_back(QVector4D(1.f, 1.f, 1.f, 1.f));
+            m_colors.emplace_back(1.f, 1.f, 1.f, .3f);
         }
       }
 
-      m_geometryDirty = true; // Mark for update
+      geometryChanged = true;
     }
 
     ++p;

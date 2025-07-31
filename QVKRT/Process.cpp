@@ -17,18 +17,14 @@ Model::Model(
     : Process::ProcessModel{duration, id, "gfxProcess", parent}
 {
   metadata().setInstanceName(*this);
-  m_outlets.push_back(new Gfx::TextureOutlet{Id<Process::Port>(0), this});
-
   init();
 }
 
 Model::~Model() { }
 
 void Model::init(){
-  if (m_inlets.empty())
-  {
-    m_inlets.push_back(new Gfx::GeometryInlet{Id<Process::Port>(0), this});
-  }
+  m_outlets.push_back(new Gfx::TextureOutlet{Id<Process::Port>(0), this});
+  m_inlets.push_back(new Gfx::GeometryInlet{Id<Process::Port>(0), this});
 }
 
 QString Model::prettyName() const noexcept

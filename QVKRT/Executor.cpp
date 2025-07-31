@@ -22,7 +22,7 @@ public:
       : gfx_exec_node{ctx}
   {
     root_outputs().push_back(new ossia::texture_outlet);
-
+    root_inputs().push_back(new ossia::geometry_inlet);
     auto n = std::make_unique<QVKRT::Node>();
 
     id = exec_context->ui->register_node(std::move(n));

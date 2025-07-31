@@ -35,6 +35,7 @@ std::function<void(PlyLoader&)> PlyLoader::ins::ply_t::process(file_type tv)
     // This part happens in a separate thread
     if (auto mesh = QVKRT::PlyFromFile(tv.filename, buf); !mesh.empty())
     {
+      qDebug() << "PlyLoader::ply_t::process() upload";
       return upload(std::move(mesh), std::move(buf));
     }
   }
@@ -174,5 +175,6 @@ void PlyLoader::rebuild_geometry(){
     }
     outputs.geometry.mesh.push_back(std::move(geom));
     outputs.geometry.dirty_mesh = true;
+    qDebug() << "PlyLoader:: mark mesh dirty";
   }
 }
