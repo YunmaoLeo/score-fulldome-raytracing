@@ -678,31 +678,69 @@ void Node::process(score::gfx::Message&& msg)
       m_positions.clear();
       m_colors.clear();
 
-      for (const auto& mesh : val->meshes->meshes)  // halp::dynamic_geometry
+      for (const auto& geom : val->meshes->meshes)
       {
-        // Extract positions
-        const float* buf = reinterpret_cast<const float*>(mesh.buffers[0].data.get());
-        int vertexCount = mesh.vertices;
+        if (geom.vertices <= 0 || geom.buffers.empty())
+          continue;
 
-        for (int i = 0; i < vertexCount; i++)
-        {
-          QVector4D pos(buf[i * 3 + 0], buf[i * 3 + 1], buf[i * 3 + 2], 1.0f);
-          m_positions.push_back(pos);
-        }
+        // Clear old data
+        m_positions.clear();
+        m_colors.clear();
 
-        bool hasColor = mesh.bindings.size() >= 2 && mesh.buffers.size() > 1;
-        if (hasColor)
+        const int vertexCount = geom.vertices;
+
+        // Iterate over attributes and extract positions/colors
+        for (size_t i = 0; i < geom.attributes.size(); ++i)
         {
-          const float* colBuf = reinterpret_cast<const float*>(mesh.buffers[1].data.get());
-          for (int i = 0; i < vertexCount; i++)
-            m_colors.emplace_back(colBuf[i*3+0], colBuf[i*3+1], colBuf[i*3+2], 1.0f);
-        }
-        else
-        {
-          for (int i = 0; i < vertexCount; i++)
-            m_colors.emplace_back(1.f, 1.f, 1.f, .3f);
+          const auto& attr = geom.attributes[i];
+          const auto& in   = geom.input[i];
+
+          // Find the buffer containing the data
+          if (in.buffer < 0 || in.buffer >= static_cast<int>(geom.buffers.size()))
+            continue;
+
+          const auto& buf = geom.buffers[in.buffer];
+          if (!buf.data || buf.size <= 0)
+            continue;
+
+          const char* base = static_cast<const char*>(buf.data.get()) + in.offset + attr.offset;
+
+          switch (attr.location)
+          {
+            case halp::dynamic_geometry::attribute::position:
+              if (attr.format == halp::dynamic_geometry::attribute::float3)
+              {
+                for (int v = 0; v < vertexCount; ++v)
+                {
+                  const float* p = reinterpret_cast<const float*>(base + v * geom.bindings[attr.binding].stride);
+                  m_positions.emplace_back(p[0], p[1], p[2], 1.0f);
+                }
+                qDebug() << "get point data with size: " << m_positions.size();
+              }
+              break;
+
+            case halp::dynamic_geometry::attribute::color:
+              if (attr.format == halp::dynamic_geometry::attribute::float3)
+              {
+                for (int v = 0; v < vertexCount; ++v)
+                {
+                  const float* c = reinterpret_cast<const float*>(base + v * geom.bindings[attr.binding].stride);
+                  m_colors.emplace_back(c[0], c[1], c[2], 1.0f);
+                }
+                qDebug() << "get color data with size: " << m_colors.size();
+              }
+              break;
+
+            default:
+              break;
+          }
         }
       }
+
+
+
+      }
+
 
       geometryChanged = true;
     }
@@ -711,4 +749,3 @@ void Node::process(score::gfx::Message&& msg)
   }
 }
 
-}

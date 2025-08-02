@@ -36,7 +36,6 @@ void PlyLoaderExecutor::loadPLYFile(const QString& path)
   if (QVKRT::loadPly(path, points, colors))
   {
     qDebug() << "[PLY Loader] Loaded" << points.size() << "points.";
-    // 🔹 这里 emit 一个 Qt Signal 给 PointCloud Node 或者存储到共享数据
   }
   else
   {

@@ -53,7 +53,7 @@ class PlyLibraryHandler final : public QObject, public Library::LibraryInterface
 
 class PlyDropHandler final : public Process::ProcessDropHandler
 {
-  SCORE_CONCRETE("c5d6b843-2d1b-4e7c-889e-abcdef987654") // 新 UUID
+  SCORE_CONCRETE("c5d6b843-2d1b-4e7c-889e-abcdef987654")
 
   QSet<QString> fileExtensions() const noexcept override { return {"ply"}; }
 

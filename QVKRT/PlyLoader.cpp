@@ -44,7 +44,6 @@ std::function<void(PlyLoader&)> PlyLoader::ins::ply_t::process(file_type tv)
 
 void PlyLoader::operator()()
 {
-  // 这里可以留空，因为文件选择事件触发时就会调用 process()
 }
 
 void PlyLoader::rebuild_geometry(){
