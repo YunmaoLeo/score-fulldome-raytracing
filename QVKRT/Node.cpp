@@ -538,8 +538,8 @@ private:
     // Create the sampler in which we are going to put the texture
     {
       auto sampler = rhi.newSampler(
-          QRhiSampler::Nearest,
-          QRhiSampler::Nearest,
+          QRhiSampler::Linear,
+          QRhiSampler::Linear,
           QRhiSampler::None,
           QRhiSampler::ClampToEdge,
           QRhiSampler::ClampToEdge);
