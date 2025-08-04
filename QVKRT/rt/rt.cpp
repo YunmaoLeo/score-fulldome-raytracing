@@ -235,7 +235,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
 
         const float scale = 5.f;
         // 1. Define a template for a single cube (8 vertices and 12 triangles -> 36 indices)
-        const float r = 0.04f; // A small radius for each cube
+        const float r = 0.01f; // A small radius for each cube
         const float cube_verts_template[8 * 3] = {
             -r, -r, -r,   r, -r, -r,   r,  r, -r,  -r,  r, -r,
             -r, -r,  r,   r, -r,  r,   r,  r,  r,  -r,  r,  r
@@ -688,12 +688,12 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
     }
 
   static float time = 0.0f;
-  time += 0.01f;
+  time += 0.f;
   float cameraY = 6.0f * sin(time); // Moves the camera between -3 and +3 on the Y axis
 
   // Define camera properties for lookAt()
-  QVector3D cameraPosition = QVector3D(-60.0f, cameraY, -45.0f); // Eye position
-  QVector3D lookAtPoint    = QVector3D(80.0f, 0.0f, 5.0f);   // The point to look at (the origin)
+  QVector3D cameraPosition = QVector3D(-15.0f, cameraY, -35.75f); // Eye position
+  QVector3D lookAtPoint    = QVector3D(20.0f, 0.0f, -36.75f);   // The point to look at (the origin)
   QVector3D upVector       = QVector3D(0.0f, 1.0f, 0.0f);   // Defines which way is "up"
 
   // Rebuild the view matrix every frame

@@ -233,6 +233,50 @@ void main ()
 }
 )_";
 
+static const constexpr auto images_vertex_shader = R"_(#version 450
+layout(location = 0) in vec2 position;
+layout(location = 1) in vec2 texcoord;
+
+layout(binding = 3) uniform sampler2D y_tex;
+layout(location = 0) out vec2 v_texcoord;
+
+layout(std140, binding = 0) uniform renderer_t {
+  mat4 clipSpaceCorrMatrix;
+  vec2 renderSize;
+} renderer;
+
+out gl_PerVertex { vec4 gl_Position; };
+
+void main()
+{
+  v_texcoord = vec2(texcoord.x, 1. - texcoord.y);
+  gl_Position = renderer.clipSpaceCorrMatrix * vec4(position.xy, 0.0, 1.);
+#if defined(QSHADER_HLSL) || defined(QSHADER_MSL)
+  gl_Position.y = - gl_Position.y;
+#endif
+}
+)_";
+
+static const constexpr auto images_fragment_shader = R"_(#version 450
+layout(std140, binding = 0) uniform renderer_t {
+  mat4 clipSpaceCorrMatrix;
+  vec2 renderSize;
+} renderer;
+
+layout(binding=3) uniform sampler2D y_tex;
+
+layout(location = 0) in vec2 v_texcoord;
+layout(location = 0) out vec4 fragColor;
+
+void main ()
+{
+  vec2 factor = textureSize(y_tex, 0) / renderer.renderSize;
+  vec2 ifactor = renderer.renderSize / textureSize(y_tex, 0);
+  fragColor = texture(y_tex, v_texcoord);
+}
+)_";
+
+
 Node::Node()
 {
   this->requiresDepth = true;
@@ -448,28 +492,34 @@ private:
     // initialize texture for ray tracing rendering
     createNativeTexture();
 
-    //original cube render pipeline
-    const auto& mesh = TexturedCube::instance();
-
-    // Load the mesh data into the GPU
-    {
-      m_meshbufs = renderer.initMeshBuffer(mesh, res);
-    }
-
+    // //original cube render pipeline
+    // const auto& mesh = TexturedCube::instance();
+    //
+    // // Load the mesh data into the GPU
+    // {
+    //   m_meshbufs = renderer.initMeshBuffer(mesh, res);
+    // }
+    //
     // Initialize the Process UBO (provides timing information, etc.)
     {
       processUBOInit(renderer);
     }
 
+    const auto& mesh = renderer.defaultQuad();
+    defaultMeshInit(renderer, mesh, res);
+
     // Initialize our camera
-    {
-      m_material.size = sizeof(score::gfx::ModelCameraUBO);
-      m_material.buffer = renderer.state.rhi->newBuffer(
-          QRhiBuffer::Dynamic,
-          QRhiBuffer::UniformBuffer,
-          sizeof(score::gfx::ModelCameraUBO));
-      SCORE_ASSERT(m_material.buffer->create());
-    }
+    // {
+    //   m_material.size = sizeof(score::gfx::ModelCameraUBO);
+    //   m_material.buffer = renderer.state.rhi->newBuffer(
+    //       QRhiBuffer::Dynamic,
+    //       QRhiBuffer::UniformBuffer,
+    //       sizeof(score::gfx::ModelCameraUBO));
+    //   SCORE_ASSERT(m_material.buffer->create());
+    // }
+
+    m_material.size = 0;
+    m_material.buffer = nullptr;
 
     auto& n = static_cast<const Node&>(this->node);
     auto& rhi = *renderer.state.rhi;
@@ -488,11 +538,11 @@ private:
     // Create the sampler in which we are going to put the texture
     {
       auto sampler = rhi.newSampler(
-          QRhiSampler::Linear,
-          QRhiSampler::Linear,
+          QRhiSampler::Nearest,
+          QRhiSampler::Nearest,
           QRhiSampler::None,
-          QRhiSampler::Repeat,
-          QRhiSampler::Repeat);
+          QRhiSampler::ClampToEdge,
+          QRhiSampler::ClampToEdge);
 
       sampler->setName("Node::sampler");
       sampler->create();
@@ -500,8 +550,11 @@ private:
       m_samplers.push_back({sampler, m_rhiTex});
     }
     // Generate the shaders
+    // std::tie(m_vertexS, m_fragmentS) = score::gfx::makeShaders(
+    //     renderer.state, vertex_shader, fragment_shader);
+
     std::tie(m_vertexS, m_fragmentS) = score::gfx::makeShaders(
-        renderer.state, vertex_shader, fragment_shader);
+      renderer.state,images_vertex_shader, images_fragment_shader);
     SCORE_ASSERT(m_vertexS.isValid());
     SCORE_ASSERT(m_fragmentS.isValid());
 
@@ -513,7 +566,7 @@ private:
       if (rt.renderTarget)
       {
         auto bindings = createDefaultBindings(
-            renderer, rt, m_processUBO, m_material.buffer, m_samplers);
+            renderer, rt, m_processUBO, nullptr, m_samplers);
         auto pipeline = buildPipeline(
             renderer, mesh, m_vertexS, m_fragmentS, rt, bindings);
         m_p.emplace_back(edge, pipeline);
@@ -574,7 +627,7 @@ private:
       score::gfx::copyMatrix(norm, ubo.modelNormal);
 
       // Send the camera UBO to the graphics card
-      res.updateDynamicBuffer(m_material.buffer, 0, m_material.size, &ubo);
+      // res.updateDynamicBuffer(m_material.buffer, 0, m_material.size, &ubo);
     }
 
 
@@ -631,7 +684,8 @@ private:
 
     m_samplers[0].texture = m_rhiTex;
 
-    const auto& mesh = TexturedCube::instance();
+    // const auto& mesh = TexturedCube::instance();
+    const auto& mesh = renderer.defaultQuad();
     defaultRenderPass(renderer, mesh, cb, edge);
   }
 
