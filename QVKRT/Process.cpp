@@ -25,6 +25,16 @@ Model::~Model() { }
 void Model::init(){
   m_outlets.push_back(new Gfx::TextureOutlet{Id<Process::Port>(0), this});
   m_inlets.push_back(new Gfx::GeometryInlet{Id<Process::Port>(0), this});
+
+  m_inlets.push_back(new Process::XYZSpinboxes{
+    ossia::vec3f{-10000., -10000., -10000.}, ossia::vec3f{10000., 10000., 10000.},
+    ossia::vec3f{-1., -1., -1.}, "Position", Id<Process::Port>(1), this});
+  m_inlets.push_back(new Process::XYZSpinboxes{
+      ossia::vec3f{-10000., -10000., -10000.}, ossia::vec3f{10000., 10000., 10000.},
+      ossia::vec3f{}, "Center", Id<Process::Port>(2), this});
+
+  m_inlets.push_back(
+      new Process::FloatSlider{0.01, 359.999, 90., "FOV", Id<Process::Port>(3), this});
 }
 
 QString Model::prettyName() const noexcept

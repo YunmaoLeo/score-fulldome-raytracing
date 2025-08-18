@@ -44,6 +44,21 @@ ProcessExecutorComponent::ProcessExecutorComponent(
     auto n = std::make_shared<mesh_node>(
         ctx.doc.plugin<Gfx::DocumentPlugin>().exec);
 
+    for(std::size_t i = 1; i <= 3; i++)
+    {
+      auto ctrl = qobject_cast<Process::ControlInlet*>(element.inlets()[i]);
+      auto& p = n->add_control();
+      ctrl->setupExecution(*n->root_inputs().back(), this);
+      p->value = ctrl->value();
+
+      QObject::connect(
+          ctrl,
+          &Process::ControlInlet::valueChanged,
+          this,
+          Gfx::con_unvalidated{ctx, i, 0, n});
+    }
+
+
     this->node = n;
     m_ossia_process = std::make_shared<ossia::node_process>(n);
   }

@@ -1,6 +1,7 @@
 #include "Node.hpp"
 
 #include "load_ply.hpp"
+#include <QElapsedTimer>
 #include "halp/geometry.hpp"
 
 #include <Gfx/Graph/GeometryFilterNodeRenderer.hpp>
@@ -15,223 +16,7 @@
 
 namespace QVKRT
 {
-/** Here we define a mesh fairly manually and in a fairly suboptimal way
- * (based on this: https://pastebin.com/DXKEmvap)
- */
-struct TexturedCube final : score::gfx::BasicMesh
-{
-  static std::vector<float> generateCubeMesh() noexcept
-  {
-    struct vec3
-    {
-      float x, y, z;
-    };
-    struct vec2
-    {
-      float x, y;
-    };
 
-    static constexpr const unsigned int indices[6 * 6] = {
-        0, 1, 3, 3, 1, 2, //
-        1, 5, 2, 2, 5, 6, //
-        5, 4, 6, 6, 4, 7, //
-        4, 0, 7, 7, 0, 3, //
-        3, 2, 7, 7, 2, 6, //
-        4, 5, 0, 0, 5, 1  //
-    };
-
-    static constexpr const vec3 vertices[8]
-        = {{-1., -1., -1.}, //
-           {1., -1., -1.},  //
-           {1., 1., -1.},   //
-           {-1., 1., -1.},  //
-           {-1., -1., 1.},  //
-           {1., -1., 1.},   //
-           {1., 1., 1.},    //
-           {-1., 1., 1.}};
-
-    static constexpr const vec2 texCoords[4]
-        = {{0, 0}, //
-           {1, 0}, //
-           {1, 1}, //
-           {0, 1}};
-
-    static constexpr const vec3 normals[6]
-        = {{0, 0, 1},  //
-           {1, 0, 0},  //
-           {0, 0, -1}, //
-           {-1, 0, 0}, //
-           {0, 1, 0},  //
-           {0, -1, 0}};
-
-    static constexpr const int texInds[6] = {0, 1, 3, 3, 1, 2};
-
-    std::vector<float> meshBuf;
-    meshBuf.reserve(36 * 3 + 36 * 2 + 36 * 3);
-
-    // The beginning of the buffer is:
-    // [ {x y z} {x y z} {x y z} ... ]
-    for (int i = 0; i < 36; i++)
-    {
-      meshBuf.push_back(vertices[indices[i]].x);
-      meshBuf.push_back(vertices[indices[i]].y);
-      meshBuf.push_back(vertices[indices[i]].z);
-    }
-
-    // Then we store the texcoords at the end: [ {u v} {u v} {u v} ... ]
-    for (int i = 0; i < 36; i++)
-    {
-      meshBuf.push_back(texCoords[texInds[i % 6]].x);
-      meshBuf.push_back(texCoords[texInds[i % 6]].y);
-    }
-
-    // Then the normals (unused in this example)
-    for (int i = 0; i < 36; i++)
-    {
-      meshBuf.push_back(normals[indices[i / 6]].x);
-      meshBuf.push_back(normals[indices[i / 6]].y);
-      meshBuf.push_back(normals[indices[i / 6]].z);
-    }
-
-    return meshBuf;
-  }
-
-  [[nodiscard]] Flags flags() const noexcept override
-  {
-    return HasPosition | HasTexCoord | HasNormals;
-  }
-
-  // Generate our mesh data
-  const std::vector<float> mesh = generateCubeMesh();
-
-  explicit TexturedCube()
-  {
-    // Our mesh's attribute data is not interleaved, thus
-    // we have multiple bindings stored in the same buffer:
-    // [ {x y z} {x y z} {x y z} ... ] [ {u v} {u v} {u v} ... ]
-
-    // Vertex
-    // Each `in vec3 position;` in the vertex shader will be an [ x y z ] element
-    // The stride is the 3 * sizeof(float) - it means that:
-    // * vertex 0's data in this attribute will start at 0 (in bytes)
-    // * vertex 1's data in this attribute will start at 3 * sizeof(float)
-    // * vertex 2's data in this attribute will start at 6 * sizeof(float)
-    // (basically that every vertex position is one after each other).
-    vertexBindings.push_back({3 * sizeof(float)});
-    vertexAttributes.push_back({0, 0, QRhiVertexInputAttribute::Float3, 0});
-
-    // Texcoord
-    // Each `in vec2 texcoord;` in the fragment shader will be an [ u v ] element
-    vertexBindings.push_back({2 * sizeof(float)});
-    vertexAttributes.push_back({1, 1, QRhiVertexInputAttribute::Float2, 0});
-
-    // These variables are used by score to upload the texture
-    // and send the draw call automatically
-    vertexArray = mesh;
-    vertexCount = 36;
-
-    // Define the topology of our mesh
-    topology = pip::Topology::Triangles;
-    cullMode = pip::CullMode::Back;
-    frontFace = pip::FrontFace::CW;
-
-    // Note: if we had an interleaved mesh, where the data is stored like
-    // [ { x y z u v } { x y z u v } { x y z u v } ] ...
-    // Then we'd have a single binding of stride 5 * sizeof(float)
-    // (3 floats for the position and 2 floats for the texture coordinates):
-
-    // vertexBindings.push_back({5 * sizeof(float)});
-
-    // And two attributes mapped to that binding
-    // The first attribute (position) starts at byte 0 in each element:
-    //
-    //     vertexAttributes.push_back(
-    //         {0, 0, QRhiVertexInputAttribute::Float3, 0});
-    //
-    // The second attribute (texcoord) starts at byte 3 * sizeof(float)
-    // (just after the position):
-    //
-    //     vertexAttributes.push_back(
-    //         {0, 1, QRhiVertexInputAttribute::Float2, 3 * sizeof(float)});
-  }
-
-  // Utility singleton
-  static const TexturedCube& instance() noexcept
-  {
-    static const TexturedCube cube;
-    return cube;
-  }
-
-  // Ignore this function
-  const char* defaultVertexShader() const noexcept override { return ""; }
-
-  // This function is called when running the draw calls,
-  // it tells the pipeline which buffers are going to be bound
-  // to each attribute defined above
-  void setupBindings(
-      const score::gfx::MeshBuffers& bufs,
-      QRhiCommandBuffer& cb) const noexcept override
-  {
-    const QRhiCommandBuffer::VertexInput bindings[] = {
-        {bufs.mesh, 0}, // vertex starts at offset zero
-        {bufs.mesh,
-         36 * 3 * sizeof(float)}, // texcoord starts after all the vertices
-    };
-
-    cb.setVertexInput(0, 2, bindings);
-  }
-};
-
-// Here we define basic shaders to display a textured cube with a camera
-static const constexpr auto vertex_shader = R"_(#version 450
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec2 texcoord;
-
-layout(location = 1) out vec2 v_texcoord;
-layout(binding = 3) uniform sampler2D y_tex;
-
-layout(std140, binding = 0) uniform renderer_t {
-  mat4 clipSpaceCorrMatrix;
-  vec2 texcoordAdjust;
-  vec2 renderSize;
-};
-
-layout(std140, binding = 2) uniform model_t {
-  mat4 matrixModelViewProjection;
-  mat4 matrixModelView;
-  mat4 matrixModel;
-  mat4 matrixView;
-  mat4 matrixProjection;
-  mat3 matrixNormal;
-};
-
-out gl_PerVertex { vec4 gl_Position; };
-
-void main()
-{
-  v_texcoord = vec2(texcoord.x, texcoordAdjust.y + texcoordAdjust.x * texcoord.y);
-  v_texcoord = texcoord;
-  gl_Position = clipSpaceCorrMatrix * matrixModelViewProjection * vec4(position, 1.0);
-}
-)_";
-
-static const constexpr auto fragment_shader = R"_(#version 450
-layout(std140, binding = 0) uniform renderer_t {
-  mat4 clipSpaceCorrMatrix;
-  vec2 texcoordAdjust;
-  vec2 renderSize;
-};
-
-layout(binding=3) uniform sampler2D y_tex;
-
-layout(location = 1) in vec2 v_texcoord;
-layout(location = 0) out vec4 fragColor;
-
-void main ()
-{
-  fragColor = texture(y_tex, v_texcoord.xy);
-}
-)_";
 
 static const constexpr auto images_vertex_shader = R"_(#version 450
 layout(location = 0) in vec2 position;
@@ -283,6 +68,10 @@ Node::Node()
 
   input.push_back(new score::gfx::Port{this,
     nullptr, score::gfx::Types::Geometry,{}});
+
+  input.push_back(new score::gfx::Port{this, nullptr, score::gfx::Types::Vec3, {}});
+  input.push_back(new score::gfx::Port{this, nullptr, score::gfx::Types::Vec3, {}});
+  input.push_back(new score::gfx::Port{this, nullptr, score::gfx::Types::Float, {}});
 
   // This texture is provided by score
   m_image = QImage(":/ossia-score.png");
@@ -595,42 +384,6 @@ private:
     auto& n = static_cast<const Node&>(this->node);
 
 
-    bool mustRecreatePasses = false;
-    {
-      // Set up a basic camera
-      auto& ubo = (score::gfx::ModelCameraUBO&)n.ubo;
-
-      // We use the Qt class QMatrix4x4 as an utility
-      // as it provides everything needed for projection transformations
-
-      // Our object rotates in a very crude way
-      QMatrix4x4 model;
-      model.scale(0.75);
-      // model.rotate(m_rotationCount++, QVector3D(1, 1, 1));
-
-      // The camera and viewports are fixed
-      QMatrix4x4 view;
-      view.lookAt(QVector3D{0, 0, 1}, QVector3D{0, 0, 0}, QVector3D{0, 1, 0});
-
-      QMatrix4x4 projection;
-      projection.perspective(90, 16. / 9., 0.001, 1000.);
-
-      QMatrix4x4 mv = view * model;
-      QMatrix4x4 mvp = projection * mv;
-      QMatrix3x3 norm = model.normalMatrix();
-
-      score::gfx::copyMatrix(mvp, ubo.mvp);
-      score::gfx::copyMatrix(mv, ubo.mv);
-      score::gfx::copyMatrix(model, ubo.model);
-      score::gfx::copyMatrix(view, ubo.view);
-      score::gfx::copyMatrix(projection, ubo.projection);
-      score::gfx::copyMatrix(norm, ubo.modelNormal);
-
-      // Send the camera UBO to the graphics card
-      // res.updateDynamicBuffer(m_material.buffer, 0, m_material.size, &ubo);
-    }
-
-
     // Update the process UBO (indicates timing)
     res.updateDynamicBuffer(
         m_processUBO,
@@ -638,6 +391,14 @@ private:
         sizeof(score::gfx::ProcessUBO),
         &n.standardUBO);
 
+
+    if (n.cameraChanged)
+    {
+      QVector3D pos(n.position[0], n.position[1], n.position[2]);
+      QVector3D center(n.center[0], n.center[1], n.center[2]);
+      raytracing.setCamera(pos, center, n.fov);
+      n.cameraChanged = false; // Reset the flag
+    }
 
     if (this->geometryChanged)  // n = static_cast<const Node&>(this->node);
     {
@@ -724,8 +485,10 @@ void Node::process(score::gfx::Message&& msg)
       ProcessNode::process(p, *val);
       if (lastIndex == val->meshes->dirty_index)
       {
-        return;
+        continue;
       }
+
+      geometryChanged = true;
       lastIndex = val->meshes->dirty_index;
 
       qDebug() << "Received a new Mesh with size: " << val->meshes->dirty_index;
@@ -794,12 +557,28 @@ void Node::process(score::gfx::Message&& msg)
 
 
       }
-
-
-      geometryChanged = true;
+    else if (auto val = ossia::get_if<ossia::value>(&m))
+    {
+      // qDebug() << "find other type of value with p: " << p;
+      switch(p)
+      {
+        case 1: // Position
+          this->position = ossia::convert<ossia::vec3f>(*val);
+          this->cameraChanged = true;
+          break;
+        case 2: // Center
+          this->center = ossia::convert<ossia::vec3f>(*val);
+          this->cameraChanged = true;
+          break;
+        case 3: // FOV
+          this->fov = ossia::convert<float>(*val);
+          this->cameraChanged = true;
+          break;
+      }
+    }
+    ++p;
     }
 
-    ++p;
   }
 }
 

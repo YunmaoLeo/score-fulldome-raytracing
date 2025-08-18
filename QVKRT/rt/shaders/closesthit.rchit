@@ -11,7 +11,7 @@ layout(binding = 3) buffer ColorBuffer {
 
 void main()
 {
-    uint pointIndex = gl_PrimitiveID / 12;
+    uint pointIndex = gl_InstanceCustomIndexEXT;
     hitValue = colors[pointIndex].rgb;
     //hitValue = vec3(1.0f - baryCoord.x - baryCoord.y, baryCoord.x, baryCoord.y);
     //hitValue = vec3(1.0f,1.0f,1.0f);

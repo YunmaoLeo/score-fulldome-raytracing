@@ -15,12 +15,17 @@ public:
   score::gfx::NodeRenderer*
   createRenderer(score::gfx::RenderList& r) const noexcept override;
   void process(score::gfx::Message&& msg) override;
-
 private:
   score::gfx::ModelCameraUBO ubo;
 
-  int lastIndex = -1;
+  //store camera state
+  ossia::vec3f position{ -15.0f, 6.0f, -35.75f };
+  ossia::vec3f center{ 20.0f, 0.0f, -36.75f };
+  float fov{ 60.f };
 
+  mutable bool cameraChanged = true;
+
+  int lastIndex = -1;
   std::vector<QVector4D> m_positions;
   std::vector<QVector4D> m_colors;
 

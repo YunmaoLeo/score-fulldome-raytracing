@@ -2,6 +2,8 @@
 
 #include "rt.hpp"
 
+#include <QElapsedTimer>
+#include <QDateTime>
 #include "Gfx/GfxContext.hpp"
 #include "score/gfx/Vulkan.hpp"
 
@@ -228,61 +230,44 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
                                uint currentFrameSlot,
                                const QSize &pixelSize)
 {
+  // start populate the cubes in CPU
     if (!m_vertexBuffer.buf || (m_lastOutputImageView && m_lastOutputImageView != outputImageView)) {
-        qDebug("setup");
+        qDebug("ray tracing setup");
         m_lastOutputImageView = outputImageView;
 
+        QElapsedTimer timer;
+      timer.start();
+      qDebug() << "[TIMESTAMP] Setup started at: " << QDateTime::currentDateTime().toString(Qt::ISODateWithMs);
 
-        const float scale = 5.f;
-        // 1. Define a template for a single cube (8 vertices and 12 triangles -> 36 indices)
-        const float r = 0.01f; // A small radius for each cube
-        const float cube_verts_template[8 * 3] = {
-            -r, -r, -r,   r, -r, -r,   r,  r, -r,  -r,  r, -r,
-            -r, -r,  r,   r, -r,  r,   r,  r,  r,  -r,  r,  r
-        };
-        const uint32_t cube_indices_template[36] = {
-            0, 1, 2, 2, 3, 0, // Front
-            1, 5, 6, 6, 2, 1, // Right
-            5, 4, 7, 7, 6, 5, // Back
-            4, 0, 3, 3, 7, 4, // Left
-            3, 2, 6, 6, 7, 3, // Top
-            4, 5, 1, 1, 0, 4  // Bottom
-        };
+      const float r = 0.01f; // A small radius for each cube
+      const float cube_verts_template[8 * 3] = {
+        -r, -r, -r,   r, -r, -r,   r,  r, -r,  -r,  r, -r,
+        -r, -r,  r,   r, -r,  r,   r,  r,  r,  -r,  r,  r
+    };
+      const uint32_t cube_indices_template[36] = {
+        0, 1, 2, 2, 3, 0, // Front
+        1, 5, 6, 6, 2, 1, // Right
+        5, 4, 7, 7, 6, 5, // Back
+        4, 0, 3, 3, 7, 4, // Left
+        3, 2, 6, 6, 7, 3, // Top
+        4, 5, 1, 1, 0, 4  // Bottom
+    };
 
-        // 2. Generate the full vertex and index arrays for all cubes
-        std::vector<float> all_vertices;
-        std::vector<uint32_t> all_indices;
-        all_vertices.reserve(m_point_positions.size() * 8 * 3);
-        all_indices.reserve(m_point_positions.size() * 36);
+      // 2. Use the template mesh directly for the BLAS
+      std::vector<float> all_vertices(cube_verts_template, cube_verts_template + 24);
+      std::vector<uint32_t> all_indices(cube_indices_template, cube_indices_template + 36);
 
-        for (size_t i = 0; i < m_point_positions.size(); ++i) {
-            const auto& pos = m_point_positions[i];
-            uint32_t vertex_offset = i * 8;
+      qDebug() << "Using single cube template with" << all_vertices.size() / 3 << "vertices and" << all_indices.size() << "indices for BLAS.";
 
-            // Add 8 vertices for this cube, offset by the point's position
-            for (int j = 0; j < 8; ++j) {
-                all_vertices.push_back(cube_verts_template[j * 3 + 0] + (pos.x() * scale));
-                all_vertices.push_back(cube_verts_template[j * 3 + 1] + (pos.y() * scale));
-                all_vertices.push_back(cube_verts_template[j * 3 + 2] + (pos.z() * scale));
-            }
+      // The existing buffer creation code for m_vertexBuffer and m_indexBuffer is now correct,
+      // but it will be uploading much less data.
+      m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                                               physDev, dev, f, df, all_vertices.size() * sizeof(float));
+      updateHostData(m_vertexBuffer, dev, df, all_vertices.data(), all_vertices.size() * sizeof(float));
 
-            // Add 36 indices for this cube, offset by the current vertex count
-            for (int j = 0; j < 36; ++j) {
-                all_indices.push_back(cube_indices_template[j] + vertex_offset);
-            }
-        }
-
-        qDebug() << "Generated" << all_vertices.size() / 3 << "vertices and" << all_indices.size() << "indices.";
-
-        // 3. Create and upload the buffers with the generated mesh data
-        m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-                                                 physDev, dev, f, df, all_vertices.size() * sizeof(float));
-        updateHostData(m_vertexBuffer, dev, df, all_vertices.data(), all_vertices.size() * sizeof(float));
-
-        m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-                                                physDev, dev, f, df, all_indices.size() * sizeof(uint32_t));
-        updateHostData(m_indexBuffer, dev, df, all_indices.data(), all_indices.size() * sizeof(uint32_t));
-
+      m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                                              physDev, dev, f, df, all_indices.size() * sizeof(uint32_t));
+      updateHostData(m_indexBuffer, dev, df, all_indices.data(), all_indices.size() * sizeof(uint32_t));
 
         //initialize vertex color
         std::vector<QVector4D> all_colors;
@@ -301,6 +286,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
 
         // bottom level acceleration structure
         {
+          qDebug() << "[TIMESTAMP] BLAS creation started at" << timer.elapsed() << "ms.";
             // m_vertexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(verts));
             // updateHostData(m_vertexBuffer, dev, df, verts, sizeof(verts));
             // m_indexBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(indices));
@@ -397,93 +383,133 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
                                      0, 1, &memoryBarrier, 0, 0, 0, 0);
         }
 
-        // top level acceleration structure
-        {
+      // top level acceleration structure
+{
+    qDebug() << "[TIMESTAMP] TLAS creation started at" << timer.elapsed() << "ms.";
+    // First, ensure we have the device address of the single BLAS we will be instancing.
+    // This should be done right after the BLAS is built.
+    VkAccelerationStructureDeviceAddressInfoKHR asAddrInfoBlas = {};
+    asAddrInfoBlas.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    asAddrInfoBlas.accelerationStructure = m_blas;
+    m_blasAddr = vkGetAccelerationStructureDeviceAddressKHR(dev, &asAddrInfoBlas);
 
-            VkAccelerationStructureInstanceKHR instance = {};
+    // 1. Create a std::vector to hold all instance data on the CPU.
+    std::vector<VkAccelerationStructureInstanceKHR> instances;
+    instances.reserve(m_point_positions.size());
 
-            QMatrix4x4 instanceTransform; // identity
-            // what we need is a 3x4 row major matrix
-            instanceTransform = instanceTransform.transposed();
-            memcpy(instance.transform.matrix, instanceTransform.constData(), 12 * sizeof(float));
+    const float scale = 5.f; // Use the same scale factor for positioning
 
-            instance.instanceCustomIndex = 0;
-            instance.mask = 0xFF;
-            instance.instanceShaderBindingTableRecordOffset = 0;
-            instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-            instance.accelerationStructureReference = m_blasAddr;
+    for (size_t i = 0; i < m_point_positions.size(); ++i) {
+        const auto& pos = m_point_positions[i];
+        VkAccelerationStructureInstanceKHR instance = {};
 
-            qDebug() << "VkAccelerationStructureInstanceKHR size is" << sizeof(instance);
-            m_instanceBuffer = createHostVisibleBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, physDev, dev, f, df, sizeof(instance));
-            updateHostData(m_instanceBuffer, dev, df, &instance, sizeof(instance));
+        // Create a transformation matrix for this instance's position.
+        QMatrix4x4 instanceTransform; // Starts as identity
+        instanceTransform.translate(pos.x() * scale, pos.y() * scale, pos.z() * scale);
+        // Vulkan needs a 3x4 row-major matrix. QMatrix4x4 is column-major.
+        instanceTransform = instanceTransform.transposed();
+        memcpy(instance.transform.matrix, instanceTransform.constData(), 12 * sizeof(float));
 
-            VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress = {};
-            instanceDataDeviceAddress.deviceAddress = m_instanceBuffer.addr;
+        // Set the custom index. The shader will use this to find the correct color.
+        instance.instanceCustomIndex = static_cast<uint32_t>(i);
+        instance.mask = 0xFF;
+        instance.instanceShaderBindingTableRecordOffset = 0;
+        instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 
-            VkAccelerationStructureGeometryKHR asGeom = {};
-            asGeom.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-            asGeom.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-            asGeom.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-            asGeom.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-            asGeom.geometry.instances.arrayOfPointers = VK_FALSE;
-            asGeom.geometry.instances.data = instanceDataDeviceAddress;
+        // Point this instance to the single, shared BLAS.
+        instance.accelerationStructureReference = m_blasAddr;
 
-            VkAccelerationStructureBuildGeometryInfoKHR asBuildGeomInfo = {};
-            asBuildGeomInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-            asBuildGeomInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-            asBuildGeomInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-            asBuildGeomInfo.geometryCount = 1;
-            asBuildGeomInfo.pGeometries = &asGeom;
-            const uint32_t primitiveCountPerGeometry = 1; // geometryCount elements
-            VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
-            sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-            vkGetAccelerationStructureBuildSizesKHR(dev,
-                                                    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                    &asBuildGeomInfo,
-                                                    &primitiveCountPerGeometry,
-                                                    &sizeInfo);
+        instances.push_back(instance);
+    }
 
-            qDebug() << "tlas buffer size" << sizeInfo.accelerationStructureSize;
-            m_tlasBuffer = createASBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR, physDev, dev, f, df,
-                                          sizeInfo.accelerationStructureSize);
+    qDebug() << "Created" << instances.size() << "instances for the TLAS build.";
 
-            VkAccelerationStructureCreateInfoKHR asCreateInfo = {};
-            asCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-            asCreateInfo.buffer = m_tlasBuffer.buf;
-            asCreateInfo.size = sizeInfo.accelerationStructureSize;
-            asCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-            vkCreateAccelerationStructureKHR(dev, &asCreateInfo, nullptr, &m_tlas);
+    // 2. Create a single GPU buffer and upload the entire vector of instances.
+    m_instanceBuffer = createHostVisibleBuffer(
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+        physDev, dev, f, df,
+        instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+    updateHostData(
+        m_instanceBuffer, dev, df,
+        instances.data(), instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
 
-            qDebug() << "tlas scratch buffer size" << sizeInfo.buildScratchSize;
-            Buffer scratch = createASBuffer(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, physDev, dev, f, df, sizeInfo.buildScratchSize);
+    VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress = {};
+    instanceDataDeviceAddress.deviceAddress = m_instanceBuffer.addr;
 
-            memset(&asBuildGeomInfo, 0, sizeof(asBuildGeomInfo));
-            asBuildGeomInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-            asBuildGeomInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-            asBuildGeomInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-            asBuildGeomInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-            asBuildGeomInfo.dstAccelerationStructure = m_tlas;
-            asBuildGeomInfo.geometryCount = 1;
-            asBuildGeomInfo.pGeometries = &asGeom;
-            asBuildGeomInfo.scratchData.deviceAddress = scratch.addr;
+    // 3. Define the acceleration structure geometry, pointing to the instance buffer.
+    VkAccelerationStructureGeometryKHR asGeom = {};
+    asGeom.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    asGeom.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    asGeom.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    asGeom.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    asGeom.geometry.instances.arrayOfPointers = VK_FALSE;
+    asGeom.geometry.instances.data = instanceDataDeviceAddress;
 
-            VkAccelerationStructureBuildRangeInfoKHR asBuildRangeInfo = {};
-            asBuildRangeInfo.primitiveCount = 1;
-            asBuildRangeInfo.primitiveOffset = 0;
-            asBuildRangeInfo.firstVertex = 0;
-            asBuildRangeInfo.transformOffset = 0;
+    VkAccelerationStructureBuildGeometryInfoKHR asBuildGeomInfo = {};
+    asBuildGeomInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    asBuildGeomInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    asBuildGeomInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    asBuildGeomInfo.geometryCount = 1;
+    asBuildGeomInfo.pGeometries = &asGeom;
 
-            VkAccelerationStructureBuildRangeInfoKHR *rangeInfo = &asBuildRangeInfo;
+    // 4. Get the required buffer sizes, ensuring you use the correct instance count.
+    const uint32_t primitiveCountPerGeometry = instances.size(); // KEY CHANGE: Use the number of instances.
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
+    sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    vkGetAccelerationStructureBuildSizesKHR(dev,
+                                            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                                            &asBuildGeomInfo,
+                                            &primitiveCountPerGeometry,
+                                            &sizeInfo);
 
-            vkCmdBuildAccelerationStructuresKHR(cb, 1, &asBuildGeomInfo, &rangeInfo);
+    qDebug() << "tlas buffer size" << sizeInfo.accelerationStructureSize;
+    m_tlasBuffer = createASBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR, physDev, dev, f, df,
+                                  sizeInfo.accelerationStructureSize);
 
-            VkAccelerationStructureDeviceAddressInfoKHR asAddrInfo = {};
-            asAddrInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-            asAddrInfo.accelerationStructure = m_tlas;
-            m_tlasAddr = vkGetAccelerationStructureDeviceAddressKHR(dev, &asAddrInfo);
+    VkAccelerationStructureCreateInfoKHR asCreateInfo = {};
+    asCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    asCreateInfo.buffer = m_tlasBuffer.buf;
+    asCreateInfo.size = sizeInfo.accelerationStructureSize;
+    asCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    vkCreateAccelerationStructureKHR(dev, &asCreateInfo, nullptr, &m_tlas);
 
-            // freeBuffer(scratch, dev, df);
-        }
+    qDebug() << "tlas scratch buffer size" << sizeInfo.buildScratchSize;
+    Buffer scratch = createASBuffer(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, physDev, dev, f, df, sizeInfo.buildScratchSize);
+
+    // 5. Set up the final build info, pointing to the destination TLAS and scratch buffer.
+    // Note: Re-using asBuildGeomInfo, but we'll reset it to be safe as per the original code.
+    memset(&asBuildGeomInfo, 0, sizeof(asBuildGeomInfo));
+    asBuildGeomInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    asBuildGeomInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    asBuildGeomInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    asBuildGeomInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    asBuildGeomInfo.dstAccelerationStructure = m_tlas;
+    asBuildGeomInfo.geometryCount = 1;
+    asBuildGeomInfo.pGeometries = &asGeom;
+    asBuildGeomInfo.scratchData.deviceAddress = scratch.addr;
+
+    // 6. Define the build range, telling the command how many instances to build.
+    VkAccelerationStructureBuildRangeInfoKHR asBuildRangeInfo = {};
+    asBuildRangeInfo.primitiveCount = instances.size(); // KEY CHANGE: Use the number of instances.
+    asBuildRangeInfo.primitiveOffset = 0;
+    asBuildRangeInfo.firstVertex = 0;
+    asBuildRangeInfo.transformOffset = 0;
+
+    VkAccelerationStructureBuildRangeInfoKHR *rangeInfo = &asBuildRangeInfo;
+
+    // 7. Record the command to build the TLAS.
+    vkCmdBuildAccelerationStructuresKHR(cb, 1, &asBuildGeomInfo, &rangeInfo);
+
+    // Finally, get the device address for the newly built TLAS.
+    VkAccelerationStructureDeviceAddressInfoKHR asAddrInfoTlas = {};
+    asAddrInfoTlas.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    asAddrInfoTlas.accelerationStructure = m_tlas;
+    m_tlasAddr = vkGetAccelerationStructureDeviceAddressKHR(dev, &asAddrInfoTlas);
+
+    // You might want to manage the scratch buffer's memory here later on.
+    // freeBuffer(scratch, dev, df);
+      qDebug() << "[TIMESTAMP] TLAS creation finished at" << timer.elapsed() << "ms.";
+}
 
         // pipeline
         {
@@ -665,6 +691,7 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
         m_proj.perspective(60.0f, aspectRatio, 0.1f, 512.0f);
         m_view.setToIdentity();
         m_view.translate(0, 0, -5);
+        qDebug() << "[TIMESTAMP] FULL setup finished in "<< timer.elapsed() << "ms.";
     }
 
     {
@@ -688,19 +715,21 @@ VkImageLayout RayTracer::doIt(QVulkanInstance *inst,
     }
 
   static float time = 0.0f;
-  time += 0.f;
+  time += 0.05f;
   float cameraY = 6.0f * sin(time); // Moves the camera between -3 and +3 on the Y axis
 
   // Define camera properties for lookAt()
   QVector3D cameraPosition = QVector3D(-15.0f, cameraY, -35.75f); // Eye position
-  QVector3D lookAtPoint    = QVector3D(20.0f, 0.0f, -36.75f);   // The point to look at (the origin)
+  // QVector3D lookAtPoint    = QVector3D(20.0f, 0.0f, -36.75f);   // The point to look at (the origin)
   QVector3D upVector       = QVector3D(0.0f, 1.0f, 0.0f);   // Defines which way is "up"
 
   // Rebuild the view matrix every frame
   m_view.setToIdentity();
-  m_view.lookAt(cameraPosition, lookAtPoint, upVector);
+  m_view.lookAt(m_cameraPosition, m_cameraCenter, upVector);
+  m_view.lookAt(cameraPosition, m_cameraCenter, upVector);
 
-
+    m_proj.setToIdentity();
+    m_proj.perspective(m_fov, float(pixelSize.width()) / pixelSize.height(), 0.1f, 512.0f);
     m_projInv = m_proj.inverted();
     m_viewInv = m_view.inverted();
     uchar ubData[128];
@@ -775,6 +804,12 @@ void RayTracer::setPointCloud(const std::vector<QVector4D>& positions, const std
 
   qDebug() << "[RayTracer] update point cloud successfully，number:" << m_pointCount;
 
+}
+
+void RayTracer::setCamera(const QVector3D& position, const QVector3D& center, float fov){
+  m_cameraPosition = position;
+  m_cameraCenter = center;
+  m_fov = fov;
 }
 
 RayTracer::Buffer RayTracer::createASBuffer(int usage, VkPhysicalDevice physDev, VkDevice dev, QVulkanFunctions *f, QVulkanDeviceFunctions *df, uint32_t size)

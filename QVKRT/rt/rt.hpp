@@ -33,6 +33,9 @@ public:
 
     void setPointCloud(const std::vector<QVector4D>& positions,
     const std::vector<QVector4D>& colors);
+
+    void setCamera(const QVector3D& position, const QVector3D& center, float fov);
+
 private:
     QRhiTexture* m_tex = nullptr;
     QSize m_size;
@@ -111,6 +114,10 @@ private:
     QMatrix4x4 m_viewInv;
 
     VkImageView m_lastOutputImageView;
+
+    QVector3D m_cameraPosition{ -15.0f, 6.0f, -35.75f };
+    QVector3D m_cameraCenter{ 20.0f, 0.0f, -36.75f };
+    float m_fov{ 60.f };
 };
 
 #endif
