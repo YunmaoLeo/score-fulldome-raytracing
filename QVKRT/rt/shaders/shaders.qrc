@@ -1,9 +1,0 @@
-<!DOCTYPE RCC>
-<RCC>
-    <qresource prefix="/shaders">
-        <file>raygen.rgen.spv</file>
-        <file>miss.rmiss.spv</file>
-        <file>closesthit.rchit.spv</file>
-        <file>raygen_pointcloud.rgen.spv</file>
-    </qresource>
-</RCC>

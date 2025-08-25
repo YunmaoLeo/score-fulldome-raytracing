@@ -1,0 +1,84 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+layout(binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, rgba8) uniform image2D image;
+
+layout(binding = 2) uniform CameraProperties {
+    mat4 projInverse;
+    mat4 viewInverse;
+    float fov;
+    int projectionMode;
+} cam;
+
+
+layout(location = 0) rayPayloadEXT vec3 hitValue;
+
+void main()
+{
+    // --- Common Setup ---
+    const vec2 pos = gl_LaunchIDEXT.xy;
+    const vec2 pixelCenter = pos + vec2(0.5);
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    const vec4 origin = cam.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
+
+    // --- Ray Parameter Declaration ---
+    vec4 direction;
+    uint rayFlags;
+    float tmin;
+    float tmax;
+
+    // --- Projection Switching Logic ---
+    if(cam.projectionMode == 0) // Standard Perspective Projection
+    {
+        vec2 d = inUV * 2.0 - 1.0;
+        vec4 target = cam.projInverse * vec4(d.x, d.y, 1.0, 1.0);
+        direction = cam.viewInverse * vec4(normalize(target.xyz), 0.0);
+
+        // Original ray parameters
+        rayFlags = gl_RayFlagsOpaqueEXT;
+        tmin = 0.001;
+        tmax = 10000.0;
+    }
+    else // Fulldome (Fisheye) Projection
+    {
+        // 1. Define FOV and normalize coordinates
+        const float fov = cam.fov;
+        vec2 uv_centered = inUV * 2.0 - 1.0;
+
+        float aspect = float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
+        uv_centered.x *= aspect;
+
+        float r = length(uv_centered);
+        float theta = r * radians(fov / 2.0);
+
+        float phi = atan(uv_centered.y, uv_centered.x);
+
+        vec3 viewDir;
+        viewDir.x = sin(theta) * cos(phi);
+        viewDir.y = sin(theta) * sin(phi);
+        viewDir.z = -cos(theta);
+
+        direction = cam.viewInverse * vec4(normalize(viewDir), 0.0);
+
+        rayFlags = gl_RayFlagsOpaqueEXT;
+        tmin = 0.001;
+        tmax = 10000.0;
+    }
+
+    hitValue = vec3(0.0, 0.0, 0.0); // Reset hitValue to a background color (e.g., black)
+
+    traceRayEXT(topLevelAS,    // Acceleration structure
+                rayFlags,      // Ray flags
+                0xFF,          // Cull mask
+                0,             // SBT record offset
+                0,             // SBT record stride
+                0,             // Miss index
+                origin.xyz,    // Ray origin
+                tmin,          // Ray min distance
+                direction.xyz, // Ray direction
+                tmax,          // Ray max distance
+                0);            // Payload location
+
+    imageStore(image, ivec2(pos), vec4(hitValue, 1.0));
+}

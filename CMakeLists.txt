@@ -17,46 +17,33 @@ project(score_addon_qvkrt LANGUAGES CXX)
 score_common_setup()
 
 # Creation of the library
-add_library(score_addon_qvkrt
-  QVKRT/Executor.hpp
-  QVKRT/Metadata.hpp
-  QVKRT/Process.hpp
-  QVKRT/Layer.hpp
-  QVKRT/Executor.cpp
-  QVKRT/Process.cpp
-  QVKRT/Node.hpp
-  QVKRT/Node.cpp
+add_library(score_addon_vkfrt
+        fulldome_voxel/Executor.hpp
+        fulldome_voxel/Metadata.hpp
+        fulldome_voxel/Process.hpp
+        fulldome_voxel/Layer.hpp
+        fulldome_voxel/Executor.cpp
+        fulldome_voxel/Process.cpp
+        fulldome_voxel/Node.hpp
+        fulldome_voxel/Node.cpp
 
-  QVKRT/rt/rt.hpp
-  QVKRT/rt/rt.cpp
+        fulldome_voxel/vk_raytracing/vk_voxel_raytracing.hpp
+        fulldome_voxel/vk_raytracing/vk_voxel_raytracing.cpp
 
   "${3RDPARTY_FOLDER}/miniply/miniply.cpp"
 
-        QVKRT/load_ply.hpp
-        QVKRT/load_ply.cpp
 
-
-        QVKRT/Ply.hpp
-        QVKRT/Ply.cpp
-
-        QVKRT/TinyObj.hpp
-        QVKRT/TinyObj.cpp
-
-
-        QVKRT/PlyLoader.hpp
-        QVKRT/PlyLoader.cpp
-
-  score_addon_qvkrt.hpp
-  score_addon_qvkrt.cpp
+        score_addon_vkfrt.hpp
+        score_addon_vkfrt.cpp
 
 )
 
-qt_add_resources(qvkrt_resources QVKRT/rt/shaders/shaders.qrc)
-target_sources(score_addon_qvkrt PRIVATE ${qvkrt_resources})
+qt_add_resources(vkfrt_resources fulldome_voxel/vk_raytracing/shaders/shaders.qrc)
+target_sources(score_addon_vkfrt PRIVATE ${vkfrt_resources})
 
 
 # Link
-target_link_libraries(score_addon_qvkrt PUBLIC
+target_link_libraries(score_addon_vkfrt PUBLIC
   score_plugin_gfx
   score_plugin_engine
   Vulkan::Vulkan
@@ -69,5 +56,5 @@ target_include_directories(
         "${3RDPARTY_FOLDER}/eigen" "${3RDPARTY_FOLDER}/miniply")
 
 # Target-specific options
-setup_score_plugin(score_addon_qvkrt)
+setup_score_plugin(score_addon_vkfrt)
 
