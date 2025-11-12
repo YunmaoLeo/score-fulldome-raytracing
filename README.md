@@ -2,6 +2,8 @@
 
 ## 1. What is it?
 
+[Demo Video](https://youtu.be/LIpdGY9FV3s)
+
 This project is a **plugin for [ossia score](https://ossia.io/score/)** that implements **real-time voxel rendering** using **Vulkan ray tracing**.  
 It is designed for **fulldome visualization**, where the field of view (FOV) exceeds **180°**, enabling immersive dome projections.
 
